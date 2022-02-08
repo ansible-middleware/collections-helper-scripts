@@ -2,12 +2,20 @@
 # SPDX-License-Identifier: MIT
 #
 # pylint: disable=invalid-name
-"""Lint rule class to test if all role arguments are named after the role.
+"""Generates README.md docs from argument_specs.yml.
+
+Usage:
+  specs2readme.py [-c] [-r DIR]
+
+Options:
+  -c                       Parse all roles in a collection [default: no]
+  -r DIR --role_dir=DIR    Input role directory [default: ./].
 """
 import typing
 import yaml
-
-import ansiblelint.rules
+import docopt
+import glob
+import re
 
 from yaml.composer import Composer
 from yaml.constructor import Constructor
@@ -16,52 +24,10 @@ from yaml.resolver import BaseResolver
 from yaml.loader import SafeLoader
 
 from pathlib import Path
-from ansiblelint.utils import parse_yaml_from_file, LINE_NUMBER_KEY
-
-if typing.TYPE_CHECKING:
-    from ansiblelint.constants import odict
-    from ansiblelint.errors import MatchError
-    from ansiblelint.file_utils import Lintable
 
 
-ID: str = 'role_vars_start_with_role_name'
-SHORTDESC: str = 'All role parameters must be named ^<role_name>_.*'
-DESC: str = r"""Rule to test if all role arguments have a name starting with the role name.
-
-- Notes
-
-  - Argument files = roles/**/{vars,defaults}/**/*.ya?ml
-  - .. seealso:: ansiblelint.config.DEFAULT_KINDS
-
-- Configuration
-
-  .. code-block:: yaml
-
-    rules:
-      role_vars_start_with_role_name:
-"""
-
-ROLENAME_SEP: str = '_'
-
-
-def _determine_role_name(var_file: Path) -> str:
-    """
-    Lookup role name from directory or galaxy_info.
-    """
-    if var_file.is_file():
-        role_path: Path = var_file.parent / ".."
-        name = str(role_path.resolve().name)
-        meta_path: Path = role_path / 'meta' / 'main.yml'
-        if (meta_path.is_file()):
-            with open(str(meta_path), 'r') as f:
-                meta = yaml.load(f, Loader=SafeLoader)
-                try:
-                    role_name = meta['galaxy_info']['role_name']
-                    name = role_name
-                except BaseException:
-                    pass
-
-    return name
+ARGUMENTS_SPEC_FILE: str = "argument_specs.yml"
+ARGUMENTS_SPEC_PATH: str = "/meta/" + ARGUMENTS_SPEC_FILE
 
 
 class LineLoader(SafeLoader):
@@ -93,32 +59,54 @@ class LineLoader(SafeLoader):
         return mapping
 
 
-class RoleVarsStartWithRoleNameRule(ansiblelint.rules.AnsibleLintRule):
+class Specs2Readme:
     """
-    Rule class to test if all role parameters (defaults, vars) have 
-    a name starting with "<role_name>_".
+    class to generate README.md doc snippets from ansible argument_specs.yml
     """
-    id = ID
-    shortdesc = SHORTDESC
-    description = DESC
-    severity = 'HIGH'
-    tags = [ID,'metadata','readability']
+    role_dir: Path
+    collection: bool
 
-    def matchyaml(self, file: 'Lintable') -> typing.List['MatchError']:
-        """Return matches for variables defined in vars files with no specification."""
-        results: List["MatchError"] = []
 
-        if file.kind == 'vars':
-            rolename = _determine_role_name(file.path)
-            with open(str(file.path), 'r') as f:
-                variables = yaml.load(f, Loader=LineLoader)
-                for var_name in filter(lambda k: not k.startswith(LINE_NUMBER_KEY) and not isinstance(variables[k],dict), variables.keys()):
-                    if not var_name.startswith(rolename+ROLENAME_SEP):
-                        results.append(
-                            self.create_matcherror(
-                                details=f'{self.shortdesc}: {var_name}', filename=file, linenumber=variables[LINE_NUMBER_KEY+var_name]
-                            )
-                        )
-        else:
-            results.extend(super().matchyaml(file))
-        return results
+    def __init__(self, role: str, collection: bool):
+        self.collection = collection
+        self.role_dir: Path = Path(role)
+        if collection:
+            self.role_dir = self.role_dir / "roles"
+        print("Work directory: %s" % self.role_dir)
+
+
+    def lookup_roles(self):
+        """ find roles """
+        if self.collection:
+            return [
+                Path(role).name
+                for role in glob.glob(str(self.role_dir)+'/**/')
+            ]
+        return [self.role_dir.name]
+
+
+    def find_arguments_marker(self):
+        return
+
+
+    def generate(self):
+        roles = self.lookup_roles()
+        for role in roles:
+            specs_path: Path = self.role_dir / "meta" / "argument_specs.yml"
+            if not specs_path.exists():
+                print("error: argument_specs not found for role %s", role)
+                exit(1)
+            with open(specs_path, 'r') as f:
+                argument_specs = yaml.load(f, Loader=LineLoader)
+
+
+def main():
+    args = docopt.docopt(__doc__)
+    role_dir = args['--role_dir'] or './'
+    collection = args['-c'] or False
+    s2rm = Specs2Readme(role_dir, collection)
+    s2rm.generate()
+
+
+if __name__ == '__main__':
+    main()

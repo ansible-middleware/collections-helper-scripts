@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 #
 # pylint: disable=invalid-name
-"""Generates arguments_spec.yml from variables parsed in role.
+"""Generates argument_specs.yml from variables parsed in role.
 
 Usage:
   vars2specs.py [-c] [-r DIR]
@@ -15,7 +15,6 @@ import typing
 import yaml
 import docopt
 import glob
-import sys
 import re
 import collections
 
@@ -75,8 +74,10 @@ class Vars2Specs:
 
 
     def __init__(self, role: str, collection: bool):
-        self.role_dir: Path = Path(role)
         self.collection = collection
+        self.role_dir: Path = Path(role)
+        if collection:
+            self.role_dir = self.role_dir / "roles"
         print("Work directory: %s" % self.role_dir)
 
 
@@ -97,22 +98,45 @@ class Vars2Specs:
         return glob.glob(str(self.role_dir)+'/defaults/*.yml') + glob.glob(str(self.role_dir)+'/vars/*.yml')
 
 
-    def generate_spec(self, path: Path):
+    def quote_default(self, value, vartype):
+        escaped = re.sub('\\\\', "\\\\\\\\", str(value))
+        return '"' + escaped + '"' if vartype not in [ "bool", "int" ] else value
+
+
+    def generate_spec(self, path: Path, defined_vars):
         """ parse variables """
         results = []
         variables = yaml.load(path, Loader=LineLoader)
         rel_path = Path(path.name).relative_to(self.role_dir)
         for var_name in filter(lambda k: not k.startswith(LINE_NUMBER_KEY) and not isinstance(variables[k],dict), variables.keys()):
-            default = 'default: "'+re.sub('\\\\',"\\\\\\\\",str(variables[var_name]))+'"' if variables[var_name] else 'required: true'
-            linenumber = variables[LINE_NUMBER_KEY+var_name]
+            linenumber = variables[LINE_NUMBER_KEY + var_name]
+            try:
+                description = defined_vars[var_name]['description']
+            except KeyError:
+                description = "TODO document argument"
+            try:
+                vartype = defined_vars[var_name]['type']
+            except KeyError:
+                vartype = type(variables[var_name]).__name__ if variables[var_name] is not None else "str"
+            default = "default: %s" % self.quote_default(variables[var_name], vartype) if variables[var_name] is not None else 'required: true'
             results.append("""\
             %s:
                 # line %s of %s
                 %s
-                description: ""
-                type: "str"
-            """ % (var_name, linenumber, str(rel_path), default))
+                description: "%s"
+                type: "%s"
+            """ % (var_name, linenumber, str(rel_path), default, description, vartype))
         return results
+
+
+    def load_existing_specs(self, role):
+        print("Parsing argument_specs for role %s" % role)
+        try:
+            with open(str(self.role_dir) + '/' + role + ARGUMENTS_SPEC_PATH, 'r') as specs:
+                specs = yaml.load(specs, Loader=LineLoader)
+                return specs['argument_specs']['main']['options']
+        except:
+            return {}
 
 
     def generate(self):
@@ -125,10 +149,11 @@ class Vars2Specs:
         variable_specs = collections.defaultdict(list)
         roles = self.lookup_roles()
         for role in roles:
+            defined_vars = self.load_existing_specs(role)
             for var_file in self.lookup_var_files(role):
                 print("Parsing %s for role %s" % (var_file, role))
                 with open(var_file, 'r') as f:
-                    variable_specs[role] += self.generate_spec(f)
+                    variable_specs[role] += self.generate_spec(f, defined_vars)
 
         root_yml = yaml.load(ARGUMENTS_SPEC_DICT)
         for role in roles:
@@ -155,4 +180,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
