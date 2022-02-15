@@ -26,8 +26,31 @@ from yaml.loader import SafeLoader
 from pathlib import Path
 
 
+LINE_NUMBER_KEY: str = "__line__"
 ARGUMENTS_SPEC_FILE: str = "argument_specs.yml"
 ARGUMENTS_SPEC_PATH: str = "/meta/" + ARGUMENTS_SPEC_FILE
+MD_MARKER_START: str = "<!--start argument_specs-->"
+MD_MARKER_END: str = "<!--end argument_specs-->"
+
+VARS_REGEX       = r"^[|]\s*[`](.*?)[`]\s*[|].*[|]$"
+VARS_TITLE:  str = """\
+Role Variables
+--------------
+"""
+VARS_HEADER: str = """\
+| Variable | Description |
+|:---------|:------------|
+"""
+
+DEFAULTS_REGEX = r"^[|]\s*[`](.*?)[`]\s*[|][^|]*[|].*[|]$"
+DEFAULTS_TITLE: str  = """\
+Role Defaults
+-------------
+"""
+DEFAULTS_HEADER: str = """\
+| Variable | Description | Default |
+|:---------|:------------|:--------|
+"""
 
 
 class LineLoader(SafeLoader):
@@ -75,7 +98,7 @@ class Specs2Readme:
         print("Work directory: %s" % self.role_dir)
 
 
-    def lookup_roles(self):
+    def lookup_roles(self) -> list:
         """ find roles """
         if self.collection:
             return [
@@ -85,19 +108,66 @@ class Specs2Readme:
         return [self.role_dir.name]
 
 
-    def find_arguments_marker(self):
-        return
+    def get_readme_arguments_marker(self, role: str):
+        readme_path: Path = self.role_dir / role / "README.md"
+        if not readme_path.exists():
+            print("error: README.md not found for role %s", role)
+            exit(2)
+        with open(str(readme_path), 'r') as f:
+            contents = f.read()
+            return contents[contents.find(MD_MARKER_START)+len(MD_MARKER_START):contents.find(MD_MARKER_END)]
+        return None
+
+
+    def load_documented_specs(self, readme: str) -> dict:
+        return { "defaults": re.findall(DEFAULTS_REGEX, readme, re.M), "vars": re.findall(VARS_REGEX, readme, re.M) }
+
+
+    def append_to_readme(self, role: str, newdefs: list, newvars: list):
+        readme_path: Path = self.role_dir / role / "README.md"
+        with open(str(readme_path), 'r+') as fd:
+            contents = fd.readlines()
+            if len(newdefs) > 0:
+                for index, line in enumerate(contents):
+                    if DEFAULTS_TITLE in (contents[index - 1] + line):
+                        contents.insert(index + 2, DEFAULTS_HEADER+'\n'.join(newdefs)+'\n\n\n')
+                        break
+            if len(newvars) > 0:
+                for index, line in enumerate(contents):
+                    if VARS_TITLE in (contents[index - 1] + line):
+                        contents.insert(index + 2, VARS_HEADER+'\n'.join(newvars)+'\n\n\n')
+                        break
+            if len(newdefs) + len(newvars) > 0:
+                fd.seek(0)
+                print("writing updated README.md for role %s" % role)
+                fd.writelines(contents)
 
 
     def generate(self):
         roles = self.lookup_roles()
         for role in roles:
-            specs_path: Path = self.role_dir / "meta" / "argument_specs.yml"
+            print("Parsing role %s" % role)
+            readme_section = self.get_readme_arguments_marker(role)
+            if (readme_section is None):
+                print("error: no argument_specs markers found in README.md for role %s", role)
+                exit(3)
+            documented_vars = self.load_documented_specs(readme_section)
+            specs_path: Path = self.role_dir / role / "meta" / "argument_specs.yml"
             if not specs_path.exists():
-                print("error: argument_specs not found for role %s", role)
+                print("error: argument_specs not found for role %s" % role)
                 exit(1)
+            new_vars = { 'vars': [], 'defaults': []}
             with open(specs_path, 'r') as f:
-                argument_specs = yaml.load(f, Loader=LineLoader)
+                argument_specs = yaml.load(f, Loader=LineLoader)['argument_specs']['main']['options']
+                for var in filter(lambda k: not k.startswith(LINE_NUMBER_KEY), argument_specs.keys()):
+                    if 'default' in argument_specs[var] and not var in documented_vars['defaults']:
+                        print("found missing argument_specs DEFAULT %s to README.md" % var)
+                        new_vars["defaults"].append(f"|`{var}`| {argument_specs[var]['description'] } | `{argument_specs[var]['default'] }` |")
+                    if 'default' not in argument_specs[var] and not var in documented_vars['vars']:
+                        print("found missing argument_specs REQUIRED VAR %s to README.md" % var)
+                        new_vars["vars"].append(f"|`{var}`| {argument_specs[var]['description'] } |")
+
+            self.append_to_readme(role, new_vars['defaults'], new_vars['vars'])
 
 
 def main():
