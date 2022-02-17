@@ -159,7 +159,7 @@ class Specs2Readme:
             new_vars = { 'vars': [], 'defaults': []}
             with open(specs_path, 'r') as f:
                 argument_specs = yaml.load(f, Loader=LineLoader)['argument_specs']['main']['options']
-                for var in filter(lambda k: not k.startswith(LINE_NUMBER_KEY), argument_specs.keys()):
+                for var in filter(lambda k: not k.startswith(LINE_NUMBER_KEY), argument_specs.keys() if argument_specs is not None else []):
                     if 'default' in argument_specs[var] and not var in documented_vars['defaults']:
                         print("found missing argument_specs DEFAULT %s to README.md" % var)
                         new_vars["defaults"].append(f"|`{var}`| {argument_specs[var]['description'] } | `{argument_specs[var]['default'] }` |")

@@ -167,7 +167,7 @@ class Vars2Specs:
                     root_yml['argument_specs']['main']['options'] = code_yml
                     yaml.dump(root_yml, f)
             else:
-                print("No variables found for role directory %s", self.role_dir)
+                print("No variables found for role directory %s" % self.role_dir)
 
 
 def main():
