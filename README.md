@@ -12,9 +12,11 @@ Then:
 
     python <script.py> [-c] [--role_dir=<role_dir>]
 
-The scripts will generate meta/argument_specs.yml for each new parsed variable; and using argument_specs.yml can generated README.md tabular lines.
+The scripts will generate `meta/argument_specs.yml` for each new parsed variable; and using argument_specs.yml, can generate README.md tabular documentation.
 
 Scripts were tested with python 3.9+
+
+If you are looking for ansible-lint rules to check argument_specs.yml against var-files, see [our custom rules](https://github.com/ansible-middleware/ansible-lint-custom-rules).
 
 
 ## Usage
@@ -23,7 +25,7 @@ Scripts were tested with python 3.9+
 ### vars2specs.py
 
 
-Parses role default/main.yml and varrs/main.yml and for each unspecified arguments creates elements inn argument_specs.yml
+Parses role default/main.yml and varrs/main.yml and for each unspecified arguments creates elements in `argument_specs.yml`
 
 ```
 Generates argument_specs.yml from variables parsed in role.
@@ -46,15 +48,16 @@ The script will look for the following placeholder in README.md:
 <!--end argument_specs-->
 ```
 
-and add any undefined variable or default reading the specification in meta/argument_specs.yml under the following headings:
+and add any undefined variable or default reading the specification in `meta/argument_specs.yml` under the following headings:
 
 ```
 Role Variables
 --------------
 
-| Variable | Description | Default |
-|:---------|:------------|:--------|
+| Variable | Description |
+|:---------|:------------|
 >> required variables will be added here
+|`i_am_required`| give value to me |
 ** other already listed variables will be left untouched
 
 
@@ -64,6 +67,7 @@ Role Defaults
 | Variable | Description | Default |
 |:---------|:------------|:--------|
 >> defaults with be added here
+|`know_what_you_doing`| override if needed | `false` |
 ** other already listed default will be left untouched
 ```
 
