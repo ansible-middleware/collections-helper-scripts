@@ -5,12 +5,14 @@
 """Generates argument_specs.yml from variables parsed in role.
 
 Usage:
-  vars2specs.py [-c] [-r DIR]
+  vars2specs.py [-c] [-i IND] [-r DIR]
 
 Options:
   -c                       Parse all roles in a collection [default: no]
+  -i IND --indent IND      White space count for yaml indention. [default: 4]
   -r DIR --role_dir=DIR    Input role directory [default: ./].
 """
+from textwrap import indent
 import typing
 import yaml
 import docopt
@@ -71,7 +73,7 @@ class Vars2Specs:
     """
     role_dir: Path
     collection: bool
-
+    indent: int = 4
 
     def __init__(self, role: str, collection: bool):
         self.collection = collection
@@ -119,13 +121,12 @@ class Vars2Specs:
             except KeyError:
                 vartype = type(variables[var_name]).__name__ if variables[var_name] is not None else "str"
             default = "default: %s" % self.quote_default(variables[var_name], vartype) if variables[var_name] is not None else 'required: true'
-            results.append("""\
+            results.append("""%s# line %s of %s
             %s:
-                # line %s of %s
                 %s
                 description: "%s"
                 type: "%s"
-            """ % (var_name, linenumber, str(rel_path), default, description, vartype))
+            """ % ((" "*3*self.indent), linenumber, str(rel_path), var_name, default, description, vartype))
         return results
 
 
@@ -143,7 +144,7 @@ class Vars2Specs:
         """ write argument specs """
         yaml = YAML()
         yaml.preserve_quotes = True
-        yaml.indent(mapping=4)
+        yaml.indent(mapping = self.indent)
         yaml.width = 800
 
         variable_specs = collections.defaultdict(list)
@@ -175,6 +176,8 @@ def main():
     role_dir = args['--role_dir'] or './'
     collection = args['-c'] or False
     v2s = Vars2Specs(role_dir, collection)
+    if (args['--indent']):
+        v2s.indent = int(args['--indent'])
     v2s.generate()
 
 
