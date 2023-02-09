@@ -5,11 +5,14 @@
 """Generates README.md docs from argument_specs.yml.
 
 Usage:
-  specs2readme.py [-c] [-r DIR]
+  specs2readme.py [-c] [-r DIR] [-d] [-2] [-n]
 
 Options:
-  -c                       Parse all roles in a collection [default: no]
+  -c --collection          Parse all roles in a collection [default: no]
   -r DIR --role_dir=DIR    Input role directory [default: ./].
+  -d --dry-run             Dry-run, write to standard output [default: no]
+  -2 --two-columns         Use two columns table format instead of three columns [default: no]
+  -n --no-diff             Emit all variables, not only the specs not already in README.md [default: no]
 """
 import typing
 import yaml
@@ -38,6 +41,10 @@ Role Variables
 --------------
 """
 VARS_HEADER: str = """\
+| Variable | Description | Required |
+|:---------|:------------|:---------|
+"""
+VARS_HEADER_2COLS: str = """\
 | Variable | Description |
 |:---------|:------------|
 """
@@ -50,6 +57,10 @@ Role Defaults
 DEFAULTS_HEADER: str = """\
 | Variable | Description | Default |
 |:---------|:------------|:--------|
+"""
+DEFAULTS_HEADER_2COLS: str = """\
+| Variable | Description |
+|:---------|:------------|
 """
 
 
@@ -88,12 +99,17 @@ class Specs2Readme:
     """
     role_dir: Path
     collection: bool
+    two_columns: bool
+    write_stdout: bool
+    emit_all: bool
 
-
-    def __init__(self, role: str, collection: bool):
+    def __init__(self, role: str, collection: bool, two_columns_output: bool, dry_run: bool, emit_all: bool):
         self.collection = collection
         self.role_dir: Path = Path(role)
-        if collection:
+        self.two_columns = two_columns_output
+        self.write_stdout = dry_run
+        self.emit_all = emit_all
+        if self.collection:
             self.role_dir = self.role_dir / "roles"
         print("Work directory: %s" % self.role_dir)
 
@@ -109,9 +125,12 @@ class Specs2Readme:
 
 
     def get_readme_arguments_marker(self, role: str):
-        readme_path: Path = self.role_dir / role / "README.md"
+        if self.collection:
+            readme_path: Path = self.role_dir / role / "README.md"
+        else:
+            readme_path: Path = self.role_dir / "README.md"
         if not readme_path.exists():
-            print("error: README.md not found for role %s", role)
+            print("error: %s not found for role `%s`" % (readme_path, role))
             exit(2)
         with open(str(readme_path), 'r') as f:
             contents = f.read()
@@ -124,7 +143,10 @@ class Specs2Readme:
 
 
     def append_to_readme(self, role: str, newdefs: list, newvars: list):
-        readme_path: Path = self.role_dir / role / "README.md"
+        if self.collection:
+            readme_path: Path = self.role_dir / role / "README.md"
+        else:
+            readme_path: Path = self.role_dir / "README.md"
         with open(str(readme_path), 'r+') as fd:
             contents = fd.readlines()
             if len(newdefs) > 0:
@@ -143,6 +165,18 @@ class Specs2Readme:
                 fd.writelines(contents)
 
 
+    def row_format_default(self, var_name: str, var_spec: dict):
+        if self.two_columns:
+            return f"|`{var_name}`\n\nDefault: `{var_spec['default'] }` | {var_spec['description'] } |"
+        return f"|`{var_name}`| {var_spec['description'] } | `{var_spec['default'] }` |"
+
+
+    def row_format_variable(self, var_name: str, var_spec: dict):
+        if self.two_columns:
+            return f"|`{var_name}`| Required: `{var_spec['required'] }`\n{var_spec['description'] } |"
+        return f"|`{var_name}`| {var_spec['description'] } | `{var_spec['required'] }` |"
+
+
     def generate(self):
         roles = self.lookup_roles()
         for role in roles:
@@ -152,7 +186,10 @@ class Specs2Readme:
                 print("error: no argument_specs markers found in README.md for role %s", role)
                 exit(3)
             documented_vars = self.load_documented_specs(readme_section)
-            specs_path: Path = self.role_dir / role / "meta" / "argument_specs.yml"
+            if self.collection:
+                specs_path: Path = self.role_dir / role / "meta" / "argument_specs.yml"
+            else:
+                specs_path: Path = self.role_dir / "meta" / "argument_specs.yml"
             if not specs_path.exists():
                 print("error: argument_specs not found for role %s" % role)
                 exit(1)
@@ -160,21 +197,31 @@ class Specs2Readme:
             with open(specs_path, 'r') as f:
                 argument_specs = yaml.load(f, Loader=LineLoader)['argument_specs']['main']['options']
                 for var in filter(lambda k: not k.startswith(LINE_NUMBER_KEY), argument_specs.keys() if argument_specs is not None else []):
-                    if 'default' in argument_specs[var] and not var in documented_vars['defaults']:
+                    if 'default' in argument_specs[var] and (not var in documented_vars['defaults'] or self.emit_all):
                         print("found missing argument_specs DEFAULT %s to README.md" % var)
-                        new_vars["defaults"].append(f"|`{var}`| {argument_specs[var]['description'] } | `{argument_specs[var]['default'] }` |")
-                    if 'default' not in argument_specs[var] and not var in documented_vars['vars']:
+                        new_vars["defaults"].append(self.row_format_default(var, argument_specs[var]))
+                    if 'default' not in argument_specs[var] and (not var in documented_vars['vars'] or self.emit_all):
                         print("found missing argument_specs REQUIRED VAR %s to README.md" % var)
-                        new_vars["vars"].append(f"|`{var}`| {argument_specs[var]['description'] } |")
+                        new_vars["vars"].append(self.row_format_variable(var, argument_specs[var]))
 
-            self.append_to_readme(role, new_vars['defaults'], new_vars['vars'])
+            if not self.write_stdout:
+               self.append_to_readme(role, new_vars['defaults'], new_vars['vars'])
+            else:
+               print(DEFAULTS_HEADER_2COLS if self.two_columns else DEFAULTS_HEADER, end='')
+               print('\n'.join(new_vars['defaults']))
+               print('\n')
+               print(VARS_HEADER_2COLS if self.two_columns else VARS_HEADER, end='')
+               print('\n'.join(new_vars['vars']))
 
 
 def main():
     args = docopt.docopt(__doc__)
     role_dir = args['--role_dir'] or './'
-    collection = args['-c'] or False
-    s2rm = Specs2Readme(role_dir, collection)
+    collection = args['--collection'] or False
+    two_columns = args['--two-columns'] or False
+    dry_run = args['--dry-run'] or False
+    no_diff = args['--no-diff'] or False
+    s2rm = Specs2Readme(role_dir, collection, two_columns, dry_run, no_diff)
     s2rm.generate()
 
 
