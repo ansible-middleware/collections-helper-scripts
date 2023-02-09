@@ -54,10 +54,10 @@ and add any undefined variable or default reading the specification in `meta/arg
 Role Variables
 --------------
 
-| Variable | Description |
-|:---------|:------------|
+| Variable | Description | Required |
+|:---------|:------------|:---------|
 >> required variables will be added here
-|`i_am_required`| give value to me |
+|`i_am_required`| give value to me | `yes` |
 ** other already listed variables will be left untouched
 
 
@@ -78,11 +78,14 @@ Usage:
 Generates README.md docs from argument_specs.yml.
 
 Usage:
-  specs2readme.py [-c] [-r DIR]
+  specs2readme.py [-c] [-r DIR] [-d] [-2] [-n]
 
 Options:
-  -c                       Parse all roles in a collection [default: no]
+  -c --collection          Parse all roles in a collection [default: no]
   -r DIR --role_dir=DIR    Input role directory [default: ./].
+  -d --dry-run             Dry-run, write to standard output [default: no]
+  -2 --two-columns         Use two columns table format instead of three columns [default: no]
+  -n --no-diff             Emit all variables, not only the specs not already in README.md [default: no]
 ```
 
 

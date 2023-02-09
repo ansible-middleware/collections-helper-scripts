@@ -167,13 +167,13 @@ class Specs2Readme:
 
     def row_format_default(self, var_name: str, var_spec: dict):
         if self.two_columns:
-            return f"|`{var_name}`\n\nDefault: `{var_spec['default'] }` | {var_spec['description'] } |"
+            return f"|`{var_name}`<br/><br/>Default: `{var_spec['default'] }` | {var_spec['description'] } |"
         return f"|`{var_name}`| {var_spec['description'] } | `{var_spec['default'] }` |"
 
 
     def row_format_variable(self, var_name: str, var_spec: dict):
         if self.two_columns:
-            return f"|`{var_name}`| Required: `{var_spec['required'] }`\n{var_spec['description'] } |"
+            return f"|`{var_name}`| Required: `{var_spec['required'] }`<br/>{var_spec['description'] } |"
         return f"|`{var_name}`| {var_spec['description'] } | `{var_spec['required'] }` |"
 
 
