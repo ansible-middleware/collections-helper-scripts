@@ -31,11 +31,12 @@ Parses role default/main.yml and varrs/main.yml and for each unspecified argumen
 Generates argument_specs.yml from variables parsed in role.
 
 Usage:
-  vars2specs.py [-c] [-r DIR]
+  vars2specs.py [-c] [-i IND] [-r DIR]
 
 Options:
   -c                       Parse all roles in a collection [default: no]
-  -r DIR --role_dir=DIR    Input role directory [default: ./].
+  -i IND --indent IND      White space count for yaml indention. [default: 4]
+  -r DIR --role_dir=DIR    Input role directory [default: ./]
 ```
 
 
@@ -82,7 +83,7 @@ Usage:
 
 Options:
   -c --collection          Parse all roles in a collection [default: no]
-  -r DIR --role_dir=DIR    Input role directory [default: ./].
+  -r DIR --role_dir=DIR    Input role directory [default: ./]
   -d --dry-run             Dry-run, write to standard output [default: no]
   -2 --two-columns         Use two columns table format instead of three columns [default: no]
   -n --no-diff             Emit all variables, not only the specs not already in README.md [default: no]
